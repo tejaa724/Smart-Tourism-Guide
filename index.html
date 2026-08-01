@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smart Tourism Guide</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .start-page {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+      background-image: url('https://source.unsplash.com/1600x900/?travel,nature'); /* or use your own image */
+      background-size: cover;
+      color: white;
+      padding: 20px;
+    }
+
+    .start-page h1 {
+      font-size: 3rem;
+      text-shadow: 2px 2px 8px #000;
+    }
+
+    .start-page p {
+      max-width: 800px;
+      font-size: 1.2rem;
+      margin: 20px 0;
+      text-shadow: 1px 1px 6px #000;
+    }
+
+    .start-btn {
+      padding: 12px 24px;
+      font-size: 1.1rem;
+      background-color: #0077b6;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+    }
+
+    .start-btn:hover {
+      background-color: #023e8a;
+    }
+
+    #main-app {
+      display: none;
+      background-color: #f7f9fa;
+    }
+
+    header {
+      background: linear-gradient(to right, #1e3c72, #2a5298);
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    header h1 {
+      margin: 10px 0;
+      font-size: 2em;
+    }
+
+    .container {
+      text-align: center;
+      padding: 20px;
+    }
+
+    input, button {
+      padding: 10px;
+      font-size: 16px;
+      margin: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      background-color: #0077b6;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #005f8a;
+    }
+
+    #map {
+      height: 500px;
+      width: 100%;
+      margin-top: 20px;
+    }
+
+    #place-info, #places-list {
+      padding: 20px;
+      margin: 10px;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .place-item {
+      border-bottom: 1px solid #eee;
+      padding: 10px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Start Page -->
+  <div class="start-page" id="start-page">
+    <h1>Welcome to Smart Tourism Guide</h1>
+    <p>
+      Explore the world intelligently! This web app uses geospatial technology and real-time OpenStreetMap data 
+      to help you discover nearby resorts and restaurants. It combines Leaflet.js mapping with Overpass API to 
+      deliver localized travel experiences in a single-page interface.
+    </p>
+    <button type="button" class="start-btn" onclick="startApp()">Start Exploring</button>
+  </div>
+
+  <!-- Main Application Page -->
+  <div id="main-app">
+    <header>
+      <h1>Find Nearby Resorts & Restaurants</h1>
+    </header>
+
+    <div class="container">
+      <input type="text" id="search" placeholder="Enter a location...">
+      <button type="button" onclick="searchLocation()">Search</button>
+    </div>
+
+    <div id="map"></div>
+    <div id="place-info"></div>
+    <div id="places-list"></div>
+  </div>
+
+  <script>
+    let map;
+
+    function startApp() {
+      document.getElementById("start-page").style.display = "none";
+      document.getElementById("main-app").style.display = "block";
+      initMap();
+    }
+
+    function initMap() {
+      map = L.map('map').setView([20.5937, 78.9629], 5);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+    }
+
+    function searchLocation() {
+      var location = document.getElementById("search").value;
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${location}`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.length > 0) {
+            var lat = data[0].lat;
+            var lon = data[0].lon;
+            map.setView([lat, lon], 13);
+            showPlaceInfo(data[0]);
+            fetchPlaces(lat, lon);
+          } else {
+            alert("Location not found");
+          }
+        });
+    }
+
+    function fetchPlaces(lat, lon) {
+      fetch(`https://overpass-api.de/api/interpreter?data=[out:json];(node(around:5000,${lat},${lon})[tourism=resort];node(around:5000,${lat},${lon})[amenity=restaurant];);out;`)
+        .then(response => response.json())
+        .then(data => {
+          var placesList = document.getElementById("places-list");
+          placesList.style.display = "block";
+          placesList.innerHTML = "<h3>Nearby Places</h3>";
+
+          data.elements.forEach(place => {
+            var placeName = place.tags.name || "Unnamed Place";
+            var placeType = place.tags.tourism || place.tags.amenity || "Unknown";
+            var rating = place.tags.stars || "N/A";
+
+            placesList.innerHTML += `<div class='place-item'><b>${placeName}</b> - ${placeType} <br> Rating: ${rating}</div>`;
+
+            L.marker([place.lat, place.lon]).addTo(map)
+              .bindPopup(`<b>${placeName}</b><br>Type: ${placeType}<br>Rating: ${rating}`);
+          });
+        });
+    }
+
+    function showPlaceInfo(place) {
+      var infoDiv = document.getElementById("place-info");
+      infoDiv.style.display = "block";
+      infoDiv.innerHTML = `<h3>${place.display_name}</h3>
+                           <p><strong>Latitude:</strong> ${place.lat}</p>
+                           <p><strong>Longitude:</strong> ${place.lon}</p>`;
+    }
+  </script>
+</body>
+</html>
